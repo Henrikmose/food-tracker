@@ -3724,6 +3724,251 @@ function loadShoppingList() {
     const saved = localStorage.getItem('shoppingList');
     if (saved) shoppingList = JSON.parse(saved);
 }
+        // ============================================
+// AI HEALTH ASSISTANT - COMPLETE CODE
+// ============================================
+
+const ANTHROPIC_API_KEY = 'YOUR_API_KEY_HERE'; // Replace with your actual key
+let healthChatHistory = [];
+let detectedPreferences = [];
+
+async function sendHealthMessage() {
+    const input = document.getElementById('health-chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+    
+    addHealthChatMessage(message, 'user');
+    input.value = '';
+    
+    const sendBtn = document.getElementById('health-send-btn');
+    const originalText = sendBtn.textContent;
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Thinking...';
+    
+    try {
+        const response = await callClaudeAPI(message);
+        addHealthChatMessage(response.text, 'assistant');
+        extractPreferences(response.text);
+    } catch (error) {
+        console.error('Health Assistant error:', error);
+        addHealthChatMessage('Sorry, I encountered an error. Please make sure you have added your Anthropic API key.', 'assistant');
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = originalText;
+    }
+}
+
+function askHealthQuestion(question) {
+    document.getElementById('health-chat-input').value = question;
+    sendHealthMessage();
+}
+
+function addHealthChatMessage(message, type) {
+    const container = document.getElementById('health-chat-container');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${type}`;
+    
+    if (type === 'assistant') {
+        const formattedMessage = message
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        messageDiv.innerHTML = `<p><strong>Health Assistant:</strong></p><p>${formattedMessage}</p>`;
+    } else {
+        messageDiv.innerHTML = `<p><strong>You:</strong> ${message}</p>`;
+    }
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+    
+    healthChatHistory.push({ role: type === 'user' ? 'user' : 'assistant', content: message });
+    saveHealthChatHistory();
+}
+
+async function callClaudeAPI(userMessage) {
+    if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY === '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') {
+        return {
+            text: "⚠️ **API Key Not Configured**\n\nTo use the AI Health Assistant:\n\n1. Get a FREE API key from https://console.anthropic.com/\n2. Edit this file and find ANTHROPIC_API_KEY\n3. Replace with your actual API key\n4. Commit changes"
+        };
+    }
+    
+    const context = buildHealthContext();
+    const messages = [{ role: 'user', content: `${context}\n\nUser question: ${userMessage}` }];
+    
+    const recentHistory = healthChatHistory.slice(-10);
+    if (recentHistory.length > 0) {
+        const historyContext = recentHistory.map(msg => 
+            `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n\n');
+        messages[0].content = `Previous conversation:\n${historyContext}\n\n${messages[0].content}`;
+    }
+    
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01'
+            },
+            body: JSON.stringify({
+                model: 'claude-3-5-sonnet-20241022',
+                max_tokens: 1024,
+                messages: messages,
+                system: `You are a knowledgeable health and nutrition assistant. Provide evidence-based advice about nutrition, foods, supplements, and healthy living. When users ask about specific foods or supplements, explain their health benefits clearly. At the end of your response, if appropriate, mention: "Would you like me to add [FOOD] to your meal preferences?" Keep responses concise but informative. Use bullet points when listing benefits.`
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`API Error: ${errorData.error?.message || response.statusText}`);
+        }
+        
+        const data = await response.json();
+        return { text: data.content[0].text };
+        
+    } catch (error) {
+        console.error('Claude API error:', error);
+        throw error;
+    }
+}
+
+function buildHealthContext() {
+    let context = 'User Profile:\n';
+    context += `- Daily calorie goal: ${userProfile.dailyCalories} cal\n`;
+    context += `- Macros: ${userProfile.macros.carbs}g carbs, ${userProfile.macros.protein}g protein, ${userProfile.macros.fat}g fat\n`;
+    
+    if (userProfile.preferences && userProfile.preferences.dietType) {
+        context += `- Diet type: ${userProfile.preferences.dietType}\n`;
+    }
+    if (userProfile.preferences && userProfile.preferences.allergies && userProfile.preferences.allergies.length > 0) {
+        context += `- Allergies: ${userProfile.preferences.allergies.join(', ')}\n`;
+    }
+    if (userProfile.preferences && userProfile.preferences.dislikes && userProfile.preferences.dislikes.length > 0) {
+        context += `- Foods to avoid: ${userProfile.preferences.dislikes.join(', ')}\n`;
+    }
+    if (userProfile.healthPreferences && userProfile.healthPreferences.length > 0) {
+        context += `- Preferred foods/supplements: ${userProfile.healthPreferences.join(', ')}\n`;
+    }
+    
+    return context;
+}
+
+function extractPreferences(response) {
+    const keywords = [
+        'ginger', 'turmeric', 'beet', 'beets', 'garlic', 'spinach', 'kale',
+        'salmon', 'avocado', 'blueberries', 'blueberry', 'eggs', 'chicken',
+        'omega-3', 'omega 3', 'vitamin d', 'vitamin c', 'probiotics', 'green tea', 
+        'cinnamon', 'honey', 'nuts', 'almonds', 'walnuts', 'sweet potato', 
+        'quinoa', 'oats', 'oatmeal', 'greek yogurt', 'broccoli', 'tomatoes', 
+        'chia seeds', 'flax seeds', 'banana', 'bananas', 'leafy greens',
+        'olive oil', 'dark chocolate', 'berries', 'lentils', 'beans'
+    ];
+    
+    const foundItems = [];
+    const lowerResponse = response.toLowerCase();
+    
+    keywords.forEach(keyword => {
+        if (lowerResponse.includes(keyword)) {
+            const capitalized = keyword.split(' ').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
+            
+            if (!detectedPreferences.includes(capitalized) && 
+                !(userProfile.healthPreferences && userProfile.healthPreferences.includes(capitalized))) {
+                foundItems.push(capitalized);
+            }
+        }
+    });
+    
+    if (foundItems.length > 0) {
+        detectedPreferences.push(...foundItems);
+        detectedPreferences = [...new Set(detectedPreferences)];
+        displayPreferenceBadges();
+    }
+}
+
+function displayPreferenceBadges() {
+    const container = document.getElementById('preference-badges');
+    if (!container) return;
+    
+    const allPreferences = [...new Set([...detectedPreferences, ...(userProfile.healthPreferences || [])])];
+    
+    if (allPreferences.length === 0) {
+        container.innerHTML = '<p style="color: #999; font-style: italic;">No preferences yet. Chat with the Health Assistant about foods you\'re interested in!</p>';
+        return;
+    }
+    
+    container.innerHTML = allPreferences.map(pref => `
+        <span class="preference-badge" onclick="removePreference('${pref}')">
+            ${pref}
+            <span class="remove-icon">×</span>
+        </span>
+    `).join('');
+}
+
+function removePreference(pref) {
+    detectedPreferences = detectedPreferences.filter(p => p !== pref);
+    if (userProfile.healthPreferences) {
+        userProfile.healthPreferences = userProfile.healthPreferences.filter(p => p !== pref);
+    }
+    displayPreferenceBadges();
+    saveProfile();
+}
+
+function savePreferencesToProfile() {
+    if (!userProfile.healthPreferences) {
+        userProfile.healthPreferences = [];
+    }
+    userProfile.healthPreferences = [
+        ...new Set([...userProfile.healthPreferences, ...detectedPreferences])
+    ];
+    detectedPreferences = [];
+    saveProfile();
+    displayPreferenceBadges();
+    alert('✅ Health preferences saved! These will be incorporated into your meal plans. Go to "AI Meal Planner" and generate meals to see them included!');
+}
+
+function saveHealthChatHistory() {
+    if (typeof currentUser !== 'undefined' && currentUser && typeof firebaseInitialized !== 'undefined' && firebaseInitialized) {
+        saveToCloud();
+    } else {
+        localStorage.setItem('healthChatHistory', JSON.stringify(healthChatHistory));
+        localStorage.setItem('detectedPreferences', JSON.stringify(detectedPreferences));
+    }
+}
+
+function loadHealthPreferences() {
+    const savedHistory = localStorage.getItem('healthChatHistory');
+    const savedPrefs = localStorage.getItem('detectedPreferences');
+    
+    if (savedHistory) {
+        try {
+            healthChatHistory = JSON.parse(savedHistory);
+        } catch (e) {
+            console.error('Error loading health chat history:', e);
+        }
+    }
+    
+    if (savedPrefs) {
+        try {
+            detectedPreferences = JSON.parse(savedPrefs);
+        } catch (e) {
+            console.error('Error loading detected preferences:', e);
+        }
+    }
+}
+
+// Initialize health preferences on page load
+if (typeof window !== 'undefined') {
+    const originalOnload = window.onload;
+    window.onload = function() {
+        if (originalOnload) originalOnload();
+        loadHealthPreferences();
+        displayPreferenceBadges();
+    };
+}
+        
     </script>
 </body>
 </html>
