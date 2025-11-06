@@ -1299,14 +1299,14 @@
 
                     <div class="chat-input-container" style="margin-top: 15px;">
                         <input type="text" id="health-chat-input" class="input-group input chat-input" placeholder="Ask about health, nutrition, supplements..." onkeypress="if(event.key==='Enter') sendHealthMessage()">
-                        <button class="btn" onclick="sendHealthMessage()">Ask</button>
+                       <button class="btn" id="health-send-btn" onclick="sendHealthMessage()">Ask</button>
                     </div>
                 </div>
 
-                <div class="card" id="health-preferences-card" style="display: none;">
+               <div class="card" id="health-preferences-card">
                     <h3>🎯 Add to My Meal Preferences</h3>
                     <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Based on our conversation, would you like to include any of these in your future meal plans?</p>
-                    <div id="suggested-preferences"></div>
+                    <div id="preference-badges"></div>
                 </div>
             </div>
 
